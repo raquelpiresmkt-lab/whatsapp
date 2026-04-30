@@ -3,10 +3,14 @@ import sys, io
 import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, HTTPException
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
+import pytz
 from dashboard import router as dashboard_router
 from state import init_db, advance_stage, Stage, get_active_conversation
 from detector import detect_stage, extract_value
 from dispatcher import dispatch_event, EventPayload
+from reporter import send_weekly_report
 from config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -34,7 +38,15 @@ def create_app(db_path: str = "database.db") -> FastAPI:
         nonlocal db_conn
         db_conn = await init_db(db_path)
         app.state.db = db_conn
+        scheduler = AsyncIOScheduler(timezone=pytz.timezone("America/Sao_Paulo"))
+        scheduler.add_job(
+            send_weekly_report,
+            CronTrigger(day_of_week="mon", hour=8, minute=0),
+            args=[db_conn],
+        )
+        scheduler.start()
         yield
+        scheduler.shutdown()
         if db_conn:
             await db_conn.close()
 
