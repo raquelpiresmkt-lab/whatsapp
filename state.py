@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import aiosqlite
 from enum import Enum
-from typing import Optional
 
 
 class Stage(str, Enum):
@@ -41,7 +40,7 @@ async def init_db(path: str = "database.db") -> aiosqlite.Connection:
     return conn
 
 
-async def get_active_conversation(conn: aiosqlite.Connection, contact: str, saleswoman: str) -> Optional[dict]:
+async def get_active_conversation(conn: aiosqlite.Connection, contact: str, saleswoman: str) -> dict | None:
     async with conn.execute(
         "SELECT * FROM conversations WHERE contact_phone=? AND saleswoman_phone=? AND current_stage != 'purchase' ORDER BY id DESC LIMIT 1",
         (contact, saleswoman)
