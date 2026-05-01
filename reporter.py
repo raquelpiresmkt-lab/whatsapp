@@ -57,17 +57,16 @@ async def generate_report_text(db) -> str:
     return "\n".join(lines)
 
 
-async def send_whatsapp_message(text: str) -> None:
+async def send_telegram_message(text: str) -> None:
     settings = get_settings()
-    url = f"{settings.evolution_api_url}/message/sendText/{settings.report_sender_instance}"
-    headers = {"Authorization": f"Bearer {settings.evolution_api_key}"}
-    payload = {"number": settings.raquel_phone, "text": text}
+    url = f"https://api.telegram.org/bot{settings.telegram_bot_token}/sendMessage"
+    payload = {"chat_id": settings.telegram_chat_id, "text": text, "parse_mode": "Markdown"}
     async with httpx.AsyncClient(timeout=15.0) as client:
-        resp = await client.post(url, json=payload, headers=headers)
+        resp = await client.post(url, json=payload)
         resp.raise_for_status()
-    logger.info("Weekly report sent to %s", settings.raquel_phone)
+    logger.info("Weekly report sent to Telegram chat %s", settings.telegram_chat_id)
 
 
 async def send_weekly_report(db) -> None:
     text = await generate_report_text(db)
-    await send_whatsapp_message(text)
+    await send_telegram_message(text)

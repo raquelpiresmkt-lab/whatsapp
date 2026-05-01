@@ -35,9 +35,9 @@ class Settings(BaseSettings):
     dashboard_password: str
     dashboard_secret_key: str
 
-    # Report Bot
-    raquel_phone: str
-    report_sender_instance: str
+    # Report Bot (Telegram)
+    telegram_bot_token: str
+    telegram_chat_id: str
 
     # Saleswomen
     saleswoman_1: str = ""
