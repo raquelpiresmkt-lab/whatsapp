@@ -89,9 +89,14 @@ async def send_ga4(*, event_name: str, phone_hash: str, event_ts: int, value: fl
 
 def send_google_ads(*, stage: Stage, phone_hash: str, event_ts: int, value: float) -> None:
     try:
+        import os
         from google.ads.googleads.client import GoogleAdsClient
         settings = get_settings()
-        client = GoogleAdsClient.load_from_storage(settings.google_ads_yaml_path)
+        # Prefer env vars (Railway); fall back to YAML file (local dev)
+        if os.environ.get("GOOGLE_ADS_DEVELOPER_TOKEN"):
+            client = GoogleAdsClient.load_from_env()
+        else:
+            client = GoogleAdsClient.load_from_storage(settings.google_ads_yaml_path)
         service = client.get_service("ConversionUploadService")
 
         conversion_action = getattr(settings, STAGE_TO_GADS[stage])
