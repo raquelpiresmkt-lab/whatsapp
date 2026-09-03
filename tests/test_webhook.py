@@ -73,3 +73,39 @@ async def test_webhook_fires_lead_on_first_message(client):
     mock_dispatch.assert_called_once()
     event_payload = mock_dispatch.call_args[0][0]
     assert event_payload.stage.value == "lead"
+
+
+async def test_webhook_captures_ref_token_on_lead(client):
+    message = {
+        **VALID_MESSAGE,
+        "data": {
+            **VALID_MESSAGE["data"],
+            "message": {"conversation": "Posso te ajudar? [ref:fb.1.1699999999.IwAR0abc]"},
+        },
+    }
+    with patch("main.dispatch_event", new_callable=AsyncMock) as mock_dispatch:
+        await client.post("/webhook", json=message, headers={"Authorization": "Bearer test_secret"})
+    event_payload = mock_dispatch.call_args[0][0]
+    assert event_payload.fbc == "fb.1.1699999999.IwAR0abc"
+
+
+async def test_webhook_carries_fbc_from_lead_into_later_purchase(client):
+    lead_msg = {
+        **VALID_MESSAGE,
+        "data": {**VALID_MESSAGE["data"], "message": {"conversation": "oi [ref:fb.1.111.abc]"}},
+    }
+    purchase_msg = {
+        **VALID_MESSAGE,
+        "data": {
+            **VALID_MESSAGE["data"],
+            "message": {"conversation": "fechado! R$ 199,00"},
+            "messageTimestamp": 1714000100,
+        },
+    }
+    with patch("main.dispatch_event", new_callable=AsyncMock) as mock_dispatch:
+        await client.post("/webhook", json=lead_msg, headers={"Authorization": "Bearer test_secret"})
+        await client.post("/webhook", json=purchase_msg, headers={"Authorization": "Bearer test_secret"})
+
+    purchase_payload = mock_dispatch.call_args_list[-1][0][0]
+    assert purchase_payload.stage.value == "purchase"
+    assert purchase_payload.fbc == "fb.1.111.abc"

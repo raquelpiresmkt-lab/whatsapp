@@ -7,8 +7,8 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 import pytz
 from dashboard import router as dashboard_router
-from state import init_db, advance_stage, Stage, get_active_conversation
-from detector import detect_stage, extract_value
+from state import init_db, advance_stage, Stage, get_active_conversation, get_conversation
+from detector import detect_stage, extract_value, extract_ref
 from dispatcher import dispatch_event, EventPayload
 from reporter import send_weekly_report
 from config import get_settings
@@ -95,6 +95,7 @@ def create_app(db_path: str = "database.db") -> FastAPI:
 
         stage = detect_stage(text)
         value = extract_value(text) if stage == Stage.PURCHASE else 0.0
+        ref_fbc = extract_ref(text)
 
         # Prefer db set by lifespan; fall back to creating a new connection (test scenarios)
         try:
@@ -111,9 +112,16 @@ def create_app(db_path: str = "database.db") -> FastAPI:
         if stage is None:
             return {"status": "no_stage"}
 
-        advanced = await advance_stage(conn, contact_phone, saleswoman_phone, stage, event_ts, value)
+        advanced = await advance_stage(conn, contact_phone, saleswoman_phone, stage, event_ts, value, fbc=ref_fbc)
         if not advanced:
             return {"status": "already_tracked"}
+
+        # fbc é capturado só na mensagem de abertura (LEAD); pra QUALIFY e
+        # PURCHASE (dias depois), recupera o que ficou guardado na conversa —
+        # get_conversation (não get_active_conversation) pra funcionar mesmo
+        # já fechada em 'purchase'.
+        conv = await get_conversation(conn, contact_phone, saleswoman_phone)
+        fbc = conv["fbc"] if conv else None
 
         await dispatch_event(EventPayload(
             contact_phone=contact_phone,
@@ -121,6 +129,7 @@ def create_app(db_path: str = "database.db") -> FastAPI:
             stage=stage,
             event_ts=event_ts,
             value=value,
+            fbc=fbc,
         ))
 
         return {"status": "ok", "stage": stage.value}

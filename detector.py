@@ -24,6 +24,11 @@ KEYWORDS = {
 
 VALUE_PATTERN = re.compile(r"R\$\s*([\d.,]+)")
 
+# Token que o botão de WhatsApp do site anexa ao texto pré-preenchido da
+# mensagem (ver tag GTM "WhatsApp — Captura fbc"), carregando o cookie _fbc
+# do visitante pra dar atribuição de clique real à venda fechada no chat.
+REF_PATTERN = re.compile(r"\[ref:([^\]\s]+)\]")
+
 
 def _normalize(text: str) -> str:
     text = text.lower()
@@ -50,3 +55,8 @@ def extract_value(text: str) -> float:
         return float(raw)
     except ValueError:
         return 0.0
+
+
+def extract_ref(text: str) -> str | None:
+    match = REF_PATTERN.search(text)
+    return match.group(1) if match else None

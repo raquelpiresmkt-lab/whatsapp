@@ -1,4 +1,4 @@
-from detector import detect_stage, extract_value, Stage
+from detector import detect_stage, extract_value, extract_ref, Stage
 
 
 def test_first_message_is_lead():
@@ -55,3 +55,15 @@ def test_accent_normalization():
 
 def test_uppercase_normalized():
     assert detect_stage("FRETE GRÁTIS?") == Stage.QUALIFY
+
+
+def test_extract_ref_found():
+    assert extract_ref("Posso te ajudar? [ref:fb.1.1699999999.IwAR0abc123]") == "fb.1.1699999999.IwAR0abc123"
+
+
+def test_extract_ref_not_found():
+    assert extract_ref("oi, quero saber sobre os brincos") is None
+
+
+def test_extract_ref_ignores_trailing_text():
+    assert extract_ref("[ref:abc123] oi tudo bem") == "abc123"

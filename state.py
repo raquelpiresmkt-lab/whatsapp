@@ -27,6 +27,7 @@ async def init_db(path: str = "database.db") -> aiosqlite.Connection:
             qualify_fired_at INTEGER,
             purchase_fired_at INTEGER,
             purchase_value   REAL DEFAULT 0.0,
+            fbc              TEXT,
             created_at       INTEGER DEFAULT (unixepoch()),
             updated_at       INTEGER DEFAULT (unixepoch())
         )
@@ -49,6 +50,18 @@ async def get_active_conversation(conn: aiosqlite.Connection, contact: str, sale
         return dict(row) if row else None
 
 
+async def get_conversation(conn: aiosqlite.Connection, contact: str, saleswoman: str) -> dict | None:
+    """Última conversa entre esse contato e vendedora, ativa ou não — usado
+    pra recuperar o fbc capturado no início da conversa, mesmo depois que
+    ela já fechou em 'purchase' (get_active_conversation exclui esse caso)."""
+    async with conn.execute(
+        "SELECT * FROM conversations WHERE contact_phone=? AND saleswoman_phone=? ORDER BY id DESC LIMIT 1",
+        (contact, saleswoman)
+    ) as cur:
+        row = await cur.fetchone()
+        return dict(row) if row else None
+
+
 async def advance_stage(
     conn: aiosqlite.Connection,
     contact: str,
@@ -56,6 +69,7 @@ async def advance_stage(
     stage: Stage,
     event_ts: int,
     value: float,
+    fbc: str | None = None,
 ) -> bool:
     conv = await get_active_conversation(conn, contact, saleswoman)
 
@@ -63,8 +77,8 @@ async def advance_stage(
         if conv is not None:
             return False
         await conn.execute(
-            "INSERT INTO conversations (contact_phone, saleswoman_phone, current_stage, lead_fired_at) VALUES (?,?,?,?)",
-            (contact, saleswoman, Stage.LEAD.value, event_ts)
+            "INSERT INTO conversations (contact_phone, saleswoman_phone, current_stage, lead_fired_at, fbc) VALUES (?,?,?,?,?)",
+            (contact, saleswoman, Stage.LEAD.value, event_ts, fbc)
         )
         await conn.commit()
         return True

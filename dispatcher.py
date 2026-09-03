@@ -38,6 +38,7 @@ class EventPayload:
     stage: Stage
     event_ts: int
     value: float
+    fbc: str | None = None
 
 
 def _hash_phone(phone: str) -> str:
@@ -45,17 +46,34 @@ def _hash_phone(phone: str) -> str:
     return hashlib.sha256(normalized.encode()).hexdigest()
 
 
-async def send_meta_capi(*, event_name: str, phone_hash: str, event_ts: int, value: float, event_id: str) -> None:
+async def send_meta_capi(
+    *, event_name: str, phone_hash: str, event_ts: int, value: float, event_id: str, fbc: str | None = None,
+) -> None:
     settings = get_settings()
     # CAPI endpoint uses Pixel ID, not Ad Account ID
     url = f"https://graph.facebook.com/v19.0/{settings.meta_pixel_id}/events"
+    user_data = {"ph": [phone_hash]}
+    if fbc:
+        # Repassa o cookie _fbc capturado no clique do botão de WhatsApp do
+        # site (ver GTM tag "WhatsApp — Captura fbc"), relayado pelo cliente
+        # via texto da mensagem — dá atribuição de clique real (7d) a uma
+        # venda fechada fora do site. Sem isso, só telefone (Advanced
+        # Matching fraco, sem sinal de clique).
+        user_data["fbc"] = fbc
     payload = {
         "data": [{
             "event_name": event_name,
             "event_time": event_ts,
             "event_id": event_id,
-            "action_source": "other",
-            "user_data": {"ph": [phone_hash]},
+            # "website" e não "other": este Pixel é um Pixel clássico com
+            # CAPI acoplada — só processa/exibe eventos com
+            # action_source="website" (confirmado ao vivo via test_event_code
+            # em 2026-09-02 para o mesmo pixel; "other"/"chat"/
+            # "system_generated" retornam events_received:1 mas nunca
+            # aparecem processados). Ver [[project_raquel_site_otimizacoes]].
+            "action_source": "website",
+            "event_source_url": "https://www.raquelpires.com.br",
+            "user_data": user_data,
             "custom_data": {"value": value, "currency": "BRL"},
         }],
         "access_token": settings.meta_access_token,
@@ -133,6 +151,7 @@ async def dispatch_event(payload: EventPayload) -> None:
             event_ts=payload.event_ts,
             value=payload.value,
             event_id=event_id,
+            fbc=payload.fbc,
         ),
         send_ga4(
             event_name=event_name_ga4,

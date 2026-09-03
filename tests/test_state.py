@@ -1,7 +1,7 @@
 import pytest
 import pytest_asyncio
 from datetime import datetime, timezone
-from state import init_db, get_active_conversation, advance_stage, get_weekly_stats, Stage
+from state import init_db, get_active_conversation, get_conversation, advance_stage, get_weekly_stats, Stage
 
 @pytest_asyncio.fixture
 async def db(tmp_path):
@@ -56,3 +56,27 @@ async def test_weekly_stats_counts_correctly(db):
     assert row["qualified"] == 1
     assert row["purchases"] == 1
     assert row["revenue"] == 3000.0
+
+
+async def test_fbc_stored_on_lead_creation(db):
+    await advance_stage(db, "5511999990001", "5511900000001", Stage.LEAD, 1234567890, 0.0, fbc="fb.1.111.abc")
+    conv = await get_active_conversation(db, "5511999990001", "5511900000001")
+    assert conv["fbc"] == "fb.1.111.abc"
+
+
+async def test_advance_without_fbc_defaults_to_none(db):
+    await advance_stage(db, "5511999990001", "5511900000001", Stage.LEAD, 1234567890, 0.0)
+    conv = await get_active_conversation(db, "5511999990001", "5511900000001")
+    assert conv["fbc"] is None
+
+
+async def test_get_conversation_after_purchase_still_returns_fbc(db):
+    await advance_stage(db, "5511999990001", "5511900000001", Stage.LEAD, 100, 0.0, fbc="fb.1.111.abc")
+    await advance_stage(db, "5511999990001", "5511900000001", Stage.QUALIFY, 101, 0.0)
+    await advance_stage(db, "5511999990001", "5511900000001", Stage.PURCHASE, 102, 3000.0)
+    # get_active_conversation não acha mais (conversa fechada em 'purchase')
+    assert await get_active_conversation(db, "5511999990001", "5511900000001") is None
+    # get_conversation acha e ainda traz o fbc capturado no início
+    conv = await get_conversation(db, "5511999990001", "5511900000001")
+    assert conv is not None
+    assert conv["fbc"] == "fb.1.111.abc"
